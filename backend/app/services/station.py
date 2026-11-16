@@ -170,18 +170,13 @@ def _shift_availability(
         "start_at": start.isoformat(),
         "end_at": end.isoformat(),
     }
-    if date_str < today:
-        item["state"] = "done"
-        item["available"] = True
-    elif date_str > today:
-        item["state"] = "upcoming"
-        item["available"] = False
-    elif now < start:
-        item["state"] = "upcoming"
-        item["available"] = False
-    elif now < end:
+    # Window first: overnight Night is anchored to yesterday's date_str but still live after midnight.
+    if start <= now < end:
         item["state"] = "live"
         item["available"] = True
+    elif date_str > today or now < start:
+        item["state"] = "upcoming"
+        item["available"] = False
     else:
         item["state"] = "done"
         item["available"] = True
