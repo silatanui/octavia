@@ -1,0 +1,33 @@
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.env
+backend/.env.local
+*.pyc
+*.pyo
+
+# Env / secrets (keep *.example)
+.env
+**/.env
+!**/.env.example
+
+# Node
+frontend/node_modules/
+frontend/dist/
+desktop/node_modules/
+desktop/release/
+desktop/resources/ui/
+desktop/resources/server/
+desktop/resources/env/
+
+# PyInstaller
+backend/build/
+backend/dist/
+backend/*.spec.bak
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

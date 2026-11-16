@@ -1,0 +1,77 @@
+{
+  "name": "octavia-desktop",
+  "productName": "Octavia Production",
+  "version": "1.0.0",
+  "description": "Octavia manufacturing production monitoring (Windows desktop)",
+  "author": "Tanui Plastic Plant",
+  "main": "main.cjs",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.octavia.production",
+    "productName": "Octavia Production",
+    "copyright": "Copyright © Tanui Plastic Plant",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/server",
+        "to": "server",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "resources/ui",
+        "to": "ui",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "resources/env",
+        "to": "env",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        },
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "Octavia-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Octavia-Portable-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Octavia Production",
+      "differentialPackage": false,
+      "license": "build/license.txt",
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

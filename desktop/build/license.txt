@@ -1,0 +1,11 @@
+Octavia Production
+Copyright (c) Tanui Plastic Plant
+
+This desktop build packages the Octavia MES UI and local API for plant-floor use.
+
+Requirements:
+- Windows 10/11 x64
+- MySQL or MariaDB reachable at the DATABASE_URL in the app .env
+  (default: local XAMPP MySQL on 127.0.0.1:3306, database octavia_production)
+
+Demo accounts are created by the backend seed script.
