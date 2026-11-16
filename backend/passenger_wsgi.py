@@ -1,14 +1,12 @@
 """cPanel / CloudLinux Passenger entrypoint for Octavia (FastAPI ASGI → WSGI).
 
-Point the Python App application root at the `backend` folder and set
-the startup file to `passenger_wsgi.py`.
-
-a2wsgi 1.10.x has no lifespan= kwarg; we swallow ASGI lifespan ourselves so
-Passenger/LiteSpeed does not hang on startup/shutdown hooks.
+Uses an explicit asyncio event loop. Passenger worker threads often have no
+loop (or a closed one), which makes a2wsgi hang until the HTTP timeout.
 """
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -49,4 +47,15 @@ class _IgnoreLifespan:
         await self.app(scope, receive, send)
 
 
-application = ASGIMiddleware(_IgnoreLifespan(asgi_app))
+def _event_loop() -> asyncio.AbstractEventLoop:
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            raise RuntimeError("closed")
+    except Exception:  # noqa: BLE001
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return loop
+
+
+application = ASGIMiddleware(_IgnoreLifespan(asgi_app), loop=_event_loop())
