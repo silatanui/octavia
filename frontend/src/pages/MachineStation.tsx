@@ -452,10 +452,7 @@ export function MachineStation() {
     if (!base.length) return []
 
     const minTs = shiftStartMs ?? base[0].ts
-    const maxTs = Math.min(
-      shiftEndMs ?? base[base.length - 1].ts,
-      base[base.length - 1].ts,
-    )
+    const maxTs = shiftEndMs ?? base[base.length - 1].ts
 
     const injectTs = new Set<number>()
     for (const stop of ganttStops) {
@@ -464,7 +461,6 @@ export function MachineStation() {
       const b = Math.min(stop.endMs, maxTs)
       injectTs.add(a)
       injectTs.add(b)
-      // mid sample keeps short stops visible on sparse hourly pace
       if (b - a > 60_000) injectTs.add(Math.round((a + b) / 2))
     }
 
@@ -514,33 +510,38 @@ export function MachineStation() {
     return points
   }, [board, ganttStops])
 
+  const paceTimeDomain = useMemo((): [number, number] | null => {
+    const start = board?.shift?.start_at ? new Date(board.shift.start_at).getTime() : null
+    const end = board?.shift?.end_at ? new Date(board.shift.end_at).getTime() : null
+    if (start == null || end == null || end <= start) return null
+    return [start, end]
+  }, [board?.shift?.start_at, board?.shift?.end_at])
+
+  const paceTimeTicks = useMemo(() => {
+    if (!paceTimeDomain) return [] as number[]
+    const [start, end] = paceTimeDomain
+    const spanH = (end - start) / 3_600_000
+    const stepMs = spanH > 6 ? 60 * 60_000 : 30 * 60_000
+    const ticks: number[] = []
+    for (let t = start; t <= end + 1000; t += stepMs) ticks.push(t)
+    if (ticks[ticks.length - 1] !== end) ticks.push(end)
+    return ticks
+  }, [paceTimeDomain])
+
   const paceStopBands = useMemo(() => {
-    if (!paceChartData.length || !ganttStops.length) {
-      return [] as { x1: string; x2: string; key: string; label: string }[]
+    if (!paceChartData.length || !ganttStops.length || !paceTimeDomain) {
+      return [] as { x1: number; x2: number; key: string; label: string }[]
     }
-    const bands: { x1: string; x2: string; key: string; label: string }[] = []
+    const [minTs, maxTs] = paceTimeDomain
+    const bands: { x1: number; x2: number; key: string; label: string }[] = []
     for (const stop of ganttStops) {
-      const inside = paceChartData.filter(
-        (p) => p.ts >= stop.startMs && p.ts <= stop.endMs && p.actual != null,
-      )
-      if (inside.length >= 2) {
-        bands.push({
-          x1: inside[0].label,
-          x2: inside[inside.length - 1].label,
-          key: stop.key,
-          label: stop.label,
-        })
-        continue
-      }
-      if (inside.length === 1) {
-        const idx = paceChartData.findIndex((p) => p.ts === inside[0].ts)
-        const left = paceChartData[Math.max(0, idx - 1)]
-        const right = paceChartData[Math.min(paceChartData.length - 1, idx + 1)]
-        bands.push({ x1: left.label, x2: right.label, key: stop.key, label: stop.label })
-      }
+      const x1 = Math.max(stop.startMs, minTs)
+      const x2 = Math.min(stop.endMs, maxTs)
+      if (x2 <= x1) continue
+      bands.push({ x1, x2, key: stop.key, label: stop.label })
     }
     return bands
-  }, [paceChartData, ganttStops])
+  }, [paceChartData, ganttStops, paceTimeDomain])
 
   const speedChartData = useMemo(() => {
     if (!board?.speed_series?.length) return []
@@ -916,10 +917,14 @@ export function MachineStation() {
                   >
                     <CartesianGrid stroke="#e8efe9" strokeDasharray="2 2" vertical={false} />
                     <XAxis
-                      dataKey="label"
+                      type="number"
+                      dataKey="ts"
+                      domain={paceTimeDomain ?? ['dataMin', 'dataMax']}
+                      ticks={paceTimeTicks}
+                      tickFormatter={(v) => formatClock(Number(v))}
                       tick={{ fill: '#64748b', fontSize: 9 }}
                       tickMargin={4}
-                      interval="preserveStartEnd"
+                      scale="time"
                     />
                     <YAxis tick={{ fill: '#94a3b8', fontSize: 9 }} width={32} allowDecimals={false} />
                     <Tooltip
@@ -928,9 +933,11 @@ export function MachineStation() {
                         if (value == null) return ['—', String(name)]
                         return [String(value), String(name)]
                       }}
-                      labelFormatter={(label, payload) => {
-                        const stopLabel = payload?.[0]?.payload?.stop_label
-                        return stopLabel ? `${label} · ${stopLabel}` : String(label)
+                      labelFormatter={(_label, payload) => {
+                        const row = payload?.[0]?.payload
+                        const clock = row?.ts != null ? formatClock(Number(row.ts)) : ''
+                        const stopLabel = row?.stop_label
+                        return stopLabel ? `${clock} · ${stopLabel}` : clock
                       }}
                     />
                     <Legend
@@ -952,7 +959,7 @@ export function MachineStation() {
                       />
                     ))}
                     <Line
-                      type="monotone"
+                      type="linear"
                       dataKey="expected"
                       name="Expected"
                       stroke="#94a3b8"
@@ -960,9 +967,10 @@ export function MachineStation() {
                       strokeDasharray="5 4"
                       dot={false}
                       connectNulls
+                      isAnimationActive={false}
                     />
                     <Line
-                      type="monotone"
+                      type="linear"
                       dataKey="actual_ok"
                       name="Actual"
                       stroke="#0f766e"
@@ -970,9 +978,10 @@ export function MachineStation() {
                       dot={false}
                       activeDot={{ r: 4, fill: '#0f766e' }}
                       connectNulls={false}
+                      isAnimationActive={false}
                     />
                     <Line
-                      type="monotone"
+                      type="linear"
                       dataKey="actual_stop"
                       name="Stop"
                       stroke="#b91c1c"
@@ -980,6 +989,7 @@ export function MachineStation() {
                       dot={false}
                       activeDot={{ r: 5, fill: '#b91c1c' }}
                       connectNulls={false}
+                      isAnimationActive={false}
                     />
                   </ComposedChart>
                 ) : (

@@ -492,6 +492,70 @@ def _current_state(events: list[dict[str, Any]], now: datetime) -> str:
     return "running" if events else "nodata"
 
 
+def _is_scheduled_structure_event(ev: dict[str, Any]) -> bool:
+    """Startup / mid-shift break / wind-down only — not unplanned or coded issue stops."""
+    state = ev.get("state")
+    label = (ev.get("label") or "").lower()
+    if state == "structure":
+        return True
+    if state == "break":
+        return True
+    if any(k in label for k in ("handover", "cleanup", "shift start", "shift end", "lunch")):
+        return True
+    if label.strip() in {"break", "break / lunch"} or label.startswith("break"):
+        return True
+    return False
+
+
+def _scheduled_structure_windows(
+    events: list[dict[str, Any]],
+) -> list[tuple[datetime, datetime]]:
+    windows: list[tuple[datetime, datetime]] = []
+    for ev in events:
+        if not _is_scheduled_structure_event(ev):
+            continue
+        windows.append((ev["started_at"], ev["ended_at"]))
+    return windows
+
+
+def _productive_seconds(
+    start: datetime,
+    end: datetime,
+    structure: list[tuple[datetime, datetime]],
+) -> float:
+    """Elapsed seconds in [start, end) excluding scheduled structure windows."""
+    if end <= start:
+        return 0.0
+    total = (end - start).total_seconds()
+    for ws, we in structure:
+        a = max(start, ws)
+        b = min(end, we)
+        if b > a:
+            total -= (b - a).total_seconds()
+    return max(total, 0.0)
+
+
+def _expected_at(
+    *,
+    at: datetime,
+    shift_start: datetime,
+    shift_end: datetime,
+    quota: float,
+    structure: list[tuple[datetime, datetime]],
+) -> int:
+    """Fixed plan slope: 0 → quota over productive shift time; flat on scheduled breaks only."""
+    t = min(max(at, shift_start), shift_end)
+    prod_total = _productive_seconds(shift_start, shift_end, structure)
+    if prod_total <= 0 or quota <= 0:
+        # Fallback: pure clock-linear across the whole shift
+        span = (shift_end - shift_start).total_seconds()
+        if span <= 0:
+            return 0
+        return int(round(quota * ((t - shift_start).total_seconds() / span)))
+    prod_elapsed = _productive_seconds(shift_start, t, structure)
+    return int(round(quota * (prod_elapsed / prod_total)))
+
+
 def _seg_payload(
     *,
     start_pct: float,
@@ -959,17 +1023,11 @@ def build_station_board(
     hour_starts = _shift_hour_starts(shift_start, shift_end)
     hour_rows = []
     oee_trend = []
-    # Cumulative target vs actual pace (shift start → now → end-of-shift plan)
-    output_pace: list[dict[str, Any]] = [
-        {
-            "label": shift_start.strftime("%H:%M"),
-            "hour": shift_start.hour,
-            "at": shift_start.isoformat(),
-            "expected": 0,
-            "actual": 0,
-            "gap": 0,
-        }
-    ]
+    # Fixed Expected slope: 0 → shift quota over productive plan time only
+    # (flattens on scheduled startup/break/cleanup; keeps climbing through unplanned stops)
+    structure_windows = _scheduled_structure_windows(live_events)
+    shift_quota = float(planned)
+
     cum_actual = 0
     for idx, h_start in enumerate(hour_starts):
         h_end = min(h_start + timedelta(hours=1), shift_end)
@@ -1016,21 +1074,9 @@ def build_station_board(
             }
         )
 
-        hours_from_start = idx + 1
         if h_start >= view_now:
             oee_trend.append(
                 {"hour": hour, "availability": None, "performance": None, "quality": None, "output": 0}
-            )
-            expected_end = int(hourly_target * hours_from_start)
-            output_pace.append(
-                {
-                    "label": h_end.strftime("%H:%M"),
-                    "hour": h_end.hour,
-                    "at": h_end.isoformat(),
-                    "expected": expected_end,
-                    "actual": None,
-                    "gap": None,
-                }
             )
         else:
             factor = 1.0 if actual_h >= target_h * 0.85 else 0.86
@@ -1044,19 +1090,79 @@ def build_station_board(
                 }
             )
             cum_actual += actual_h
-            elapsed_in_shift = (min(h_end, view_now) - shift_start).total_seconds() / 3600.0
-            expected_now = int(round(hourly_target * elapsed_in_shift))
-            point_end = min(h_end, view_now)
-            output_pace.append(
-                {
-                    "label": point_end.strftime("%H:%M"),
-                    "hour": point_end.hour,
-                    "at": point_end.isoformat(),
-                    "expected": expected_now,
-                    "actual": cum_actual,
-                    "gap": cum_actual - expected_now,
-                }
-            )
+
+    # Dense pace series on a true time grid (15 min) for linear X-axis rendering
+    output_pace: list[dict[str, Any]] = []
+    pace_cursor = shift_start
+    pace_step = timedelta(minutes=15)
+    pace_times: list[datetime] = []
+    while pace_cursor <= shift_end:
+        pace_times.append(pace_cursor)
+        pace_cursor += pace_step
+    if pace_times[-1] != shift_end:
+        pace_times.append(shift_end)
+    # Ensure "now" is a sample so the live tip is accurate
+    if shift_start < view_now < shift_end and all(abs((t - view_now).total_seconds()) > 30 for t in pace_times):
+        pace_times.append(view_now)
+        pace_times.sort()
+    # Also sample structure boundaries so Expected flattening is visible
+    for ws, we in structure_windows:
+        for edge in (ws, we):
+            if shift_start <= edge <= shift_end and all(
+                abs((t - edge).total_seconds()) > 20 for t in pace_times
+            ):
+                pace_times.append(edge)
+    pace_times = sorted(set(pace_times))
+
+    running_cum = 0.0
+    slow_cum = 0.0
+    for t in pace_times:
+        # Cumulative actual up to t (only through view_now)
+        clip = min(t, view_now)
+        running_cum = 0.0
+        slow_cum = 0.0
+        for ev in live_events:
+            a = max(ev["started_at"], shift_start)
+            b = min(ev["ended_at"], clip)
+            if b <= a:
+                continue
+            secs = (b - a).total_seconds()
+            if ev["state"] == "running":
+                running_cum += secs
+            elif ev["state"] == "slow":
+                slow_cum += secs
+        actual_at = int(
+            round((running_cum / 60.0) * run_rate + (slow_cum / 60.0) * run_rate * SLOW_RATE_FACTOR)
+        )
+        expected_at = _expected_at(
+            at=t,
+            shift_start=shift_start,
+            shift_end=shift_end,
+            quota=shift_quota,
+            structure=structure_windows,
+        )
+        past_or_now = t <= view_now + timedelta(seconds=1)
+        output_pace.append(
+            {
+                "label": t.strftime("%H:%M"),
+                "hour": t.hour,
+                "at": t.isoformat(),
+                "expected": expected_at,
+                "actual": actual_at if past_or_now else None,
+                "gap": (actual_at - expected_at) if past_or_now else None,
+            }
+        )
+    cum_actual = next(
+        (p["actual"] for p in reversed(output_pace) if p.get("actual") is not None),
+        0,
+    ) or 0
+    expected_now_val = _expected_at(
+        at=view_now,
+        shift_start=shift_start,
+        shift_end=shift_end,
+        quota=shift_quota,
+        structure=structure_windows,
+    )
 
     shift_info = _shift_public(shift_def, shift_start, shift_end, date_str=today, now=now)
     return {
@@ -1130,14 +1236,11 @@ def build_station_board(
         "oee_trend": oee_trend,
         "output_pace": output_pace,
         "pace": {
-            "expected_now": next(
-                (p["expected"] for p in reversed(output_pace) if p.get("actual") is not None),
-                0,
-            ),
+            "expected_now": expected_now_val,
             "actual_now": cum_actual,
-            "gap": cum_actual
-            - next((p["expected"] for p in reversed(output_pace) if p.get("actual") is not None), 0),
+            "gap": cum_actual - expected_now_val,
             "hourly_target": hourly_target,
+            "shift_quota": int(round(shift_quota)),
             "unit": product_info["unit"],
         },
         "hour_rows": hour_rows,
