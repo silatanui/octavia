@@ -2,8 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, formatNum, formatPct } from '../api'
 import { AiSummaryPanel, type AiSummary } from '../components/AiSummaryPanel'
+import { Skeleton } from '../components/Skeleton'
 import { TimelineBar } from '../components/TimelineBar'
 import { PLANT, machineByCode, machineByIndex, productByCode } from '../plantCatalog'
+
+const TABLE_SKELETON_ROWS = 8
 
 type TimelineSeg = {
   start_pct: number
@@ -226,9 +229,14 @@ export function Dashboard() {
 
   const kpis = data?.kpis
   const machines = data?.machines || []
+  const initialLoading = loading && !data
+  const refreshing = loading && !!data
 
   return (
-    <div id="daily-board" className={`daily-board${fullscreen ? ' is-fullscreen' : ''}`}>
+    <div
+      id="daily-board"
+      className={`daily-board${fullscreen ? ' is-fullscreen' : ''}${initialLoading ? ' is-loading' : ''}${refreshing ? ' is-refreshing' : ''}`}
+    >
       <header className="daily-header">
         <div className="daily-toolbar">
           <div className="daily-toolbar-meta">
@@ -236,10 +244,9 @@ export function Dashboard() {
               {PLANT.siteName} · {PLANT.location}
             </span>
             <span className="refreshed">
-              Refreshed{' '}
-              {data?.last_updated ? new Date(data.last_updated).toLocaleString() : '—'}
-              {loading ? ' · Updating…' : ''}
-              {data?.active_shift?.label ? ` · ${data.active_shift.label}` : ''}
+              {initialLoading
+                ? 'Loading board…'
+                : `Refreshed ${data?.last_updated ? new Date(data.last_updated).toLocaleString() : '—'}${refreshing ? ' · Updating…' : ''}${data?.active_shift?.label ? ` · ${data.active_shift.label}` : ''}`}
             </span>
           </div>
           <div className="daily-actions">
@@ -333,61 +340,73 @@ export function Dashboard() {
 
       {error ? <div className="error" style={{ padding: '0 1.25rem' }}>{error}</div> : null}
 
-      <section className="daily-kpis">
-        <div className="daily-kpi">
-          <div className="k-label">Date Range</div>
-          <div className="k-value sm">
-            {datePreset === 'today'
-              ? 'Today'
-              : datePreset === 'yesterday'
-                ? 'Yesterday'
-                : datePreset === '3days'
-                  ? '3 Days Ago'
-                  : data?.date_label || date}
-            <span className="vs"> vs {data?.compare_label || 'prior day'}</span>
-          </div>
-        </div>
-        <div className="daily-kpi">
-          <div className="k-label">Total Parts</div>
-          <div className="k-value">
-            {formatNum(kpis?.actual_production as number)}
-            <Delta value={kpis?.production_delta as number} />
-          </div>
-        </div>
-        <div className="daily-kpi">
-          <div className="k-label">Utilization Rate</div>
-          <div className="k-value">
-            {formatPct(kpis?.utilization as number)}
-            <Delta value={kpis?.availability_delta_pp as number} suffix="pp" />
-          </div>
-        </div>
-        <div className="daily-kpi">
-          <div className="k-label">Parts Goal</div>
-          <div className="k-value">
-            {formatPct(kpis?.achievement as number)}
-            <Delta value={kpis?.achievement_delta_pp as number} suffix="pp" />
-          </div>
-        </div>
-        <div className="daily-kpi">
-          <div className="k-label">Downtime</div>
-          <div className="k-value">
-            {String(kpis?.downtime_label || '—')}
-            {kpis?.downtime_delta_minutes != null ? (
-              <span
-                className={`delta ${
-                  Number(kpis.downtime_delta_minutes) > 0
-                    ? 'down'
-                    : Number(kpis.downtime_delta_minutes) < 0
-                      ? 'up'
-                      : ''
-                }`}
-              >
-                {Number(kpis.downtime_delta_minutes) > 0 ? '+' : Number(kpis.downtime_delta_minutes) < 0 ? '−' : ''}
-                {String(kpis.downtime_delta_label || '')}
-              </span>
-            ) : null}
-          </div>
-        </div>
+      <section className="daily-kpis" aria-busy={initialLoading}>
+        {initialLoading ? (
+          Array.from({ length: 5 }, (_, i) => (
+            <div className="daily-kpi" key={`kpi-sk-${i}`}>
+              <div className="k-label">{['Date Range', 'Total Parts', 'Utilization Rate', 'Parts Goal', 'Downtime'][i]}</div>
+              <Skeleton className="sk-block sk-kpi-value" />
+              <Skeleton className="sk-block sk-kpi-sub" />
+            </div>
+          ))
+        ) : (
+          <>
+            <div className="daily-kpi">
+              <div className="k-label">Date Range</div>
+              <div className="k-value sm">
+                {datePreset === 'today'
+                  ? 'Today'
+                  : datePreset === 'yesterday'
+                    ? 'Yesterday'
+                    : datePreset === '3days'
+                      ? '3 Days Ago'
+                      : data?.date_label || date}
+                <span className="vs"> vs {data?.compare_label || 'prior day'}</span>
+              </div>
+            </div>
+            <div className="daily-kpi">
+              <div className="k-label">Total Parts</div>
+              <div className="k-value">
+                {formatNum(kpis?.actual_production as number)}
+                <Delta value={kpis?.production_delta as number} />
+              </div>
+            </div>
+            <div className="daily-kpi">
+              <div className="k-label">Utilization Rate</div>
+              <div className="k-value">
+                {formatPct(kpis?.utilization as number)}
+                <Delta value={kpis?.availability_delta_pp as number} suffix="pp" />
+              </div>
+            </div>
+            <div className="daily-kpi">
+              <div className="k-label">Parts Goal</div>
+              <div className="k-value">
+                {formatPct(kpis?.achievement as number)}
+                <Delta value={kpis?.achievement_delta_pp as number} suffix="pp" />
+              </div>
+            </div>
+            <div className="daily-kpi">
+              <div className="k-label">Downtime</div>
+              <div className="k-value">
+                {String(kpis?.downtime_label || '—')}
+                {kpis?.downtime_delta_minutes != null ? (
+                  <span
+                    className={`delta ${
+                      Number(kpis.downtime_delta_minutes) > 0
+                        ? 'down'
+                        : Number(kpis.downtime_delta_minutes) < 0
+                          ? 'up'
+                          : ''
+                    }`}
+                  >
+                    {Number(kpis.downtime_delta_minutes) > 0 ? '+' : Number(kpis.downtime_delta_minutes) < 0 ? '−' : ''}
+                    {String(kpis.downtime_delta_label || '')}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </>
+        )}
       </section>
 
       <div className={`daily-content${summaryOpen ? ' with-summary' : ''}`}>
@@ -400,6 +419,12 @@ export function Dashboard() {
             <span><i className="swatch planned" /> Start / end</span>
             <span><i className="swatch gray" /> Upcoming / off shift</span>
           </div>
+          {initialLoading ? (
+            <div className="daily-skel-hint" role="status">
+              <i className="sk-pulse-dot" />
+              Loading machines and timelines…
+            </div>
+          ) : null}
           <table className="daily-table">
             <thead>
               <tr>
@@ -423,72 +448,113 @@ export function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {machines.map((m) => {
-                const catalog = machineByCode(m.machine_code) || machineByIndex(m.id)
-                const product = productByCode(catalog.productCode)
-                return (
-                <tr key={m.id} onClick={() => navigate(`/machines/${m.id}`)}>
-                  <td className="col-machine">
-                    <div className="machine-cell">
-                      <img className="machine-thumb" src={catalog.image} alt="" />
-                      <div>
-                        <div className="machine-name">{catalog.name}</div>
-                        <div className="machine-sub">
-                          {catalog.code} · {product.code}
+              {initialLoading
+                ? Array.from({ length: TABLE_SKELETON_ROWS }, (_, i) => (
+                    <tr key={`sk-row-${i}`} className="daily-skel-row" aria-hidden>
+                      <td className="col-machine">
+                        <div className="daily-skel-machine">
+                          <Skeleton className="daily-skel-thumb" />
+                          <div className="daily-skel-lines">
+                            <Skeleton className="daily-skel-line" style={{ width: '72%' }} />
+                            <Skeleton className="daily-skel-line" style={{ width: '48%' }} />
+                            <Skeleton className="daily-skel-line" style={{ width: '58%' }} />
+                          </div>
+                          <Skeleton className="daily-skel-thumb sm" />
                         </div>
-                        <div className="machine-sub faint">{product.name}</div>
-                      </div>
-                      <img className="product-thumb" src={product.image} alt="" />
-                    </div>
-                  </td>
-                  <td className="col-count">
-                    <div className="count-main">{formatNum(m.output)}</div>
-                    <div className="count-prev">({formatNum(m.previous_output)})</div>
-                  </td>
-                  <td className="col-oee">
-                    <MetricBadge value={m.oee} />
-                  </td>
-                  <td className="col-util">
-                    <MetricBadge value={m.utilization} compare goal={m.utilization_goal} />
-                  </td>
-                  <td className="col-cycle">
-                    <span
-                      className={`badge ${
-                        m.cycle_delta_seconds == null
-                          ? 'neutral'
-                          : m.cycle_delta_seconds <= 0
-                            ? 'good'
-                            : 'bad'
-                      }`}
-                    >
-                      {m.cycle_label}
-                    </span>
-                  </td>
-                  <td className="col-reasons">
-                    <ul className="reason-list">
-                      {m.downtime_reasons.length ? (
-                        m.downtime_reasons.map((r) => (
-                          <li key={r.reason}>
-                            <span>{r.reason}</span>
-                            <strong>{r.hours_label}</strong>
-                          </li>
-                        ))
-                      ) : (
-                        <li className="empty">No downtime</li>
-                      )}
-                    </ul>
-                  </td>
-                  <td className="col-timeline">
-                    <TimelineBar
-                      segments={m.timeline}
-                      hours={data?.timeline_hours}
-                      shiftStartHour={data?.timeline_shift_start ?? 6}
-                      shiftHours={data?.timeline_shift_hours ?? 8}
-                    />
-                  </td>
-                </tr>
-              )})}
-              {!machines.length ? (
+                      </td>
+                      <td className="col-count">
+                        <div className="daily-skel-lines">
+                          <Skeleton className="daily-skel-line" style={{ width: '3.2rem' }} />
+                          <Skeleton className="daily-skel-line" style={{ width: '2.4rem' }} />
+                        </div>
+                      </td>
+                      <td className="col-oee">
+                        <Skeleton className="daily-skel-badge" />
+                      </td>
+                      <td className="col-util">
+                        <Skeleton className="daily-skel-badge" style={{ width: '5.5rem' }} />
+                      </td>
+                      <td className="col-cycle">
+                        <Skeleton className="daily-skel-badge" style={{ width: '4.8rem' }} />
+                      </td>
+                      <td className="col-reasons">
+                        <div className="daily-skel-lines">
+                          <Skeleton className="daily-skel-line" style={{ width: '88%' }} />
+                          <Skeleton className="daily-skel-line" style={{ width: '70%' }} />
+                        </div>
+                      </td>
+                      <td className="col-timeline">
+                        <Skeleton className="sk-block daily-skel-timeline" />
+                      </td>
+                    </tr>
+                  ))
+                : machines.map((m) => {
+                    const catalog = machineByCode(m.machine_code) || machineByIndex(m.id)
+                    const product = productByCode(catalog.productCode)
+                    return (
+                      <tr key={m.id} onClick={() => navigate(`/machines/${m.id}`)}>
+                        <td className="col-machine">
+                          <div className="machine-cell">
+                            <img className="machine-thumb" src={catalog.image} alt="" />
+                            <div>
+                              <div className="machine-name">{catalog.name}</div>
+                              <div className="machine-sub">
+                                {catalog.code} · {product.code}
+                              </div>
+                              <div className="machine-sub faint">{product.name}</div>
+                            </div>
+                            <img className="product-thumb" src={product.image} alt="" />
+                          </div>
+                        </td>
+                        <td className="col-count">
+                          <div className="count-main">{formatNum(m.output)}</div>
+                          <div className="count-prev">({formatNum(m.previous_output)})</div>
+                        </td>
+                        <td className="col-oee">
+                          <MetricBadge value={m.oee} />
+                        </td>
+                        <td className="col-util">
+                          <MetricBadge value={m.utilization} compare goal={m.utilization_goal} />
+                        </td>
+                        <td className="col-cycle">
+                          <span
+                            className={`badge ${
+                              m.cycle_delta_seconds == null
+                                ? 'neutral'
+                                : m.cycle_delta_seconds <= 0
+                                  ? 'good'
+                                  : 'bad'
+                            }`}
+                          >
+                            {m.cycle_label}
+                          </span>
+                        </td>
+                        <td className="col-reasons">
+                          <ul className="reason-list">
+                            {m.downtime_reasons.length ? (
+                              m.downtime_reasons.map((r) => (
+                                <li key={r.reason}>
+                                  <span>{r.reason}</span>
+                                  <strong>{r.hours_label}</strong>
+                                </li>
+                              ))
+                            ) : (
+                              <li className="empty">No downtime</li>
+                            )}
+                          </ul>
+                        </td>
+                        <td className="col-timeline">
+                          <TimelineBar
+                            segments={m.timeline}
+                            hours={data?.timeline_hours}
+                            shiftStartHour={data?.timeline_shift_start ?? 6}
+                            shiftHours={data?.timeline_shift_hours ?? 8}
+                          />
+                        </td>
+                      </tr>
+                    )
+                  })}
+              {!initialLoading && !machines.length ? (
                 <tr>
                   <td colSpan={7} className="empty-row">
                     No machines for the selected filters.

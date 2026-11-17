@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Skeleton } from './Skeleton'
 
 export type SummaryItem = {
   category: string
@@ -87,7 +88,24 @@ export function AiSummaryPanel({
       </div>
 
       <div className="ai-summary-body">
-        {loading && !summary ? <div className="ai-loading">Generating summary…</div> : null}
+        {loading && !summary ? (
+          <div className="ai-skel" role="status" aria-label="Generating summary">
+            <Skeleton className="sk-block ai-skel-line" style={{ width: '92%' }} />
+            <Skeleton className="sk-block ai-skel-line" style={{ width: '78%' }} />
+            <Skeleton className="sk-block ai-skel-line" style={{ width: '84%' }} />
+            <div className="ai-skel-card">
+              <Skeleton className="daily-skel-badge" style={{ width: '5rem', height: '1rem' }} />
+              <Skeleton className="sk-block ai-skel-line" style={{ width: '70%' }} />
+              <Skeleton className="sk-block ai-skel-line" style={{ width: '95%' }} />
+              <Skeleton className="sk-block ai-skel-line" style={{ width: '60%' }} />
+            </div>
+            <div className="ai-skel-card">
+              <Skeleton className="daily-skel-badge" style={{ width: '4.5rem', height: '1rem' }} />
+              <Skeleton className="sk-block ai-skel-line" style={{ width: '66%' }} />
+              <Skeleton className="sk-block ai-skel-line" style={{ width: '88%' }} />
+            </div>
+          </div>
+        ) : null}
 
         {summary ? (
           <>

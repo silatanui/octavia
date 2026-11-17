@@ -1,3 +1,5 @@
+import { ChartSkeleton, Skeleton } from './Skeleton'
+
 export type AiFinding = {
   severity?: string
   title: string
@@ -55,7 +57,14 @@ export function ReportsAiPanel({
       </div>
 
       <div className="reports-ai-body">
-        {loading && !analysis ? <div className="ai-loading">Analyzing report…</div> : null}
+        {loading && !analysis ? (
+          <div className="ai-skel" role="status" aria-label="Analyzing report">
+            <Skeleton className="sk-block ai-skel-line" style={{ width: '90%' }} />
+            <Skeleton className="sk-block ai-skel-line" style={{ width: '75%' }} />
+            <Skeleton className="sk-block ai-skel-line" style={{ width: '82%' }} />
+            <ChartSkeleton height={120} />
+          </div>
+        ) : null}
 
         {analysis ? (
           <>

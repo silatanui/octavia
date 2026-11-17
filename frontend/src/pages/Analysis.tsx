@@ -27,6 +27,7 @@ import {
   type WidgetId,
 } from '../analysisLayout'
 import { api, formatNum, formatPct } from '../api'
+import { ChartSkeleton, Skeleton } from '../components/Skeleton'
 
 type OeeBlock = {
   days: number
@@ -736,7 +737,16 @@ export function Analysis() {
         </p>
 
         {error ? <div className="error">{error}</div> : null}
-        {loading && !data ? <div className="demo-banner">Loading analysis…</div> : null}
+        {loading && !data ? (
+          <div className="analysis-skel-grid" aria-busy="true" role="status" aria-label="Loading analysis">
+            {Array.from({ length: 6 }, (_, i) => (
+              <div className="analysis-skel-card" key={`an-sk-${i}`}>
+                <Skeleton className="sk-block" style={{ height: 12, width: '45%' }} />
+                <ChartSkeleton height={150} />
+              </div>
+            ))}
+          </div>
+        ) : null}
 
         {data ? (
           <div className="analysis-grid analysis-grid-board">

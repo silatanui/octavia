@@ -20,6 +20,7 @@ import {
 } from 'recharts'
 import { addWidget, loadLayout, type WidgetId } from '../analysisLayout'
 import { api, formatNum, formatPct } from '../api'
+import { ChartSkeleton, KpiSkeleton, TableSkeleton } from '../components/Skeleton'
 
 function PinToAnalysis({ widgetId }: { widgetId: WidgetId }) {
   const [pinned, setPinned] = useState(() => loadLayout().includes(widgetId))
@@ -421,6 +422,26 @@ export function Reports() {
 
         {error ? <div className="error">{error}</div> : null}
 
+        {loading && !data ? (
+          <div aria-busy="true">
+            <KpiSkeleton count={6} />
+            <div className="mgmt-report-grid">
+              <div className="panel mgmt-panel mgmt-panel-wide">
+                <ChartSkeleton height={220} />
+              </div>
+              <div className="panel mgmt-panel">
+                <ChartSkeleton height={200} />
+              </div>
+              <div className="panel mgmt-panel">
+                <ChartSkeleton height={200} />
+              </div>
+              <div className="panel mgmt-panel mgmt-panel-wide">
+                <TableSkeleton rows={5} cols={4} />
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {kpis ? (
           <div className="mgmt-kpi-strip">
             <div className="mgmt-kpi">
@@ -458,7 +479,7 @@ export function Reports() {
           </div>
         ) : null}
 
-        <div className="mgmt-report-grid">
+        {data ? <div className="mgmt-report-grid">
           <div className="panel mgmt-panel mgmt-panel-wide">
             <div className="panel-head-row">
               <h2 style={{ margin: 0 }}>OEE trend</h2>
@@ -746,7 +767,7 @@ export function Reports() {
               </table>
             </div>
           </div>
-        </div>
+        </div> : null}
       </div>
       <ReportsAiPanel
         open={aiOpen}

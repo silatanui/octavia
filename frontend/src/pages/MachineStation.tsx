@@ -13,6 +13,7 @@ import {
 } from 'recharts'
 import { api, formatNum, formatPct } from '../api'
 import { useAuth } from '../auth'
+import { ChartSkeleton, KpiSkeleton, Skeleton } from '../components/Skeleton'
 import { UserAvatar } from '../components/Wordmark'
 
 type Segment = {
@@ -102,6 +103,25 @@ function parsePaceLabel(
 function formatClock(ms: number) {
   const d = new Date(ms)
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+function formatSegTooltip(seg: Segment, operatorName?: string | null) {
+  if (!seg.started_at || !seg.ended_at) return seg.label
+  const a = new Date(seg.started_at)
+  const b = new Date(seg.ended_at)
+  const mins = Math.max(1, Math.round((b.getTime() - a.getTime()) / 60_000))
+  const fmt = (d: Date) =>
+    d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+  const systemStates = new Set(['running', 'slow', 'future', 'structure', 'break'])
+  const who = systemStates.has(seg.state) ? 'System' : operatorName || 'Operator'
+  return `${fmt(a)} – ${fmt(b)} (${mins}m) | ${seg.label} | Logged by ${who}`
+}
+
+function statusPulseClass(status: string) {
+  if (/fault|unplanned|stop/i.test(status)) return 'issue'
+  if (/idle|setup|slow|planned/i.test(status)) return 'drip'
+  if (/offline/i.test(status)) return 'off'
+  return 'run'
 }
 
 function lerp(a: number, b: number, t: number) {
@@ -425,6 +445,18 @@ export function MachineStation() {
     return out
   }, [board])
 
+  const nowMarker = useMemo(() => {
+    if (!board?.live || !board.shift?.start_at || !board.shift?.end_at) return null
+    const start = new Date(board.shift.start_at).getTime()
+    const end = new Date(board.shift.end_at).getTime()
+    const t = clock.getTime()
+    if (t < start || t > end) return null
+    const elapsed = t - start
+    const hourIdx = Math.min(Math.floor(elapsed / 3_600_000), Math.max(board.hour_rows.length - 1, 0))
+    const pct = Math.min(Math.max((elapsed % 3_600_000) / 3_600_000, 0) * 100, 100)
+    return { hourIdx, pct }
+  }, [board, clock])
+
   const paceChartData = useMemo(() => {
     if (!board?.output_pace?.length) return []
     const dateStr = board.date
@@ -648,7 +680,20 @@ export function MachineStation() {
   }
 
   if (!board) {
-    return <div className="station-board station-light station-loading">Loading station…</div>
+    return (
+      <div className="station-board station-light station-skel" role="status" aria-label="Loading station">
+        <div className="station-skel-top">
+          <Skeleton className="sk-block" style={{ height: 28, width: 220 }} />
+          <Skeleton className="sk-block" style={{ height: 28, width: 120 }} />
+        </div>
+        <KpiSkeleton count={4} />
+        <div className="station-skel-grid">
+          <ChartSkeleton height={220} />
+          <ChartSkeleton height={220} />
+        </div>
+        <Skeleton className="sk-block" style={{ height: 120, width: '100%', borderRadius: 8 }} />
+      </div>
+    )
   }
 
   const m = board.machine
@@ -903,6 +948,9 @@ export function MachineStation() {
               ) : null}
             </div>
             <div className="chart-body chart-body-pace">
+              {(chartMode === 'pace' ? !paceChartData.length : !speedChartData.length) ? (
+                <ChartSkeleton height={200} />
+              ) : (
               <ResponsiveContainer width="100%" height="100%">
                 {chartMode === 'pace' ? (
                   <ComposedChart
@@ -1060,10 +1108,59 @@ export function MachineStation() {
                   </ComposedChart>
                 )}
               </ResponsiveContainer>
+              )}
             </div>
           </div>
         </div>
       </header>
+
+      <div className="station-context-bar" aria-label="Shift context">
+        <div className="ctx-machine">
+          <div className="ctx-machine-text">
+            <strong>{m.machine_name}</strong>
+            <span>
+              {m.machine_code}
+              {m.line_name ? ` · ${m.line_name}` : ''}
+            </span>
+          </div>
+          <span className={`ctx-status-badge ${statusPulseClass(m.status)}`}>
+            <i className="ctx-pulse" aria-hidden />
+            {m.status.toUpperCase()}
+          </span>
+        </div>
+        <div className="ctx-metrics">
+          <div className="ctx-metric">
+            <span className="ctx-label">Availability</span>
+            <strong>{formatPct(board.kpis.availability)}</strong>
+          </div>
+          <div className="ctx-metric">
+            <span className="ctx-label">OEE</span>
+            <strong>{formatPct(board.kpis.oee)}</strong>
+          </div>
+          <div className="ctx-metric">
+            <span className="ctx-label">Parts</span>
+            <strong>
+              {Math.round(board.quantity.actual)}
+              <em> / {Math.round(board.quantity.planned)}</em>
+            </strong>
+          </div>
+        </div>
+        <div className="ctx-job">
+          <span className="ctx-label">Active job</span>
+          <strong>
+            {batch?.product_name || batch?.product_code || 'No active job'}
+            {batch?.product_name && batch?.product_code ? (
+              <em className="mono"> · {batch.product_code}</em>
+            ) : null}
+          </strong>
+          <span className="ctx-cycle">
+            Target cycle{' '}
+            {board.quantity.ideal_cycle_seconds
+              ? `${Math.round(board.quantity.ideal_cycle_seconds)}s`
+              : '—'}
+          </span>
+        </div>
+      </div>
 
       <section className="station-timeline">
         <div className="timeline-head">
@@ -1092,16 +1189,18 @@ export function MachineStation() {
               <span key={i}>{String(i * 5).padStart(2, '0')}</span>
             ))}
           </div>
-          <span className="scale-spacer end" />
+          <span className="scale-qty-head">Parts / Target</span>
         </div>
         {board.hour_rows.map((row, rowIdx) => {
           const isFutureHour = row.segments.length === 1 && row.segments[0]?.state === 'future'
           const eventMarkers = row.markers.filter((mk) => mk.kind === 'tool' || mk.kind === 'alert')
           const actualInt = Math.round(row.actual)
           const targetInt = Math.round(row.target)
+          const qtyPct = targetInt > 0 ? Math.min((actualInt / targetInt) * 100, 100) : 0
+          const showNow = nowMarker?.hourIdx === rowIdx
           return (
             <div
-              className={`hour-row${rowIdx % 2 === 0 ? ' hour-row--alt' : ''}${isFutureHour ? ' is-future' : ''}`}
+              className={`hour-row${rowIdx % 2 === 0 ? ' hour-row--alt' : ''}${isFutureHour ? ' is-future' : ''}${showNow ? ' is-now' : ''}`}
               key={row.hour}
             >
               <div className="hour-label">{row.label}</div>
@@ -1121,8 +1220,9 @@ export function MachineStation() {
                 <div className="hour-track">
                   <div className="hour-grid" aria-hidden />
                   {row.segments.map((s, i) => {
-                    // +0.12% closes hairline gaps between abutting abs-positioned segments
-                    const width = Math.max(s.end_pct - s.start_pct, 0.35) + 0.12
+                    const raw = Math.max(s.end_pct - s.start_pct, 0.35)
+                    // Leave a thin visual gap between adjacent blocks
+                    const width = Math.max(raw - 0.35, 0.28)
                     const needsReason = !!(s.needs_reason || s.label === 'Uncommented')
                     const clickable = s.state !== 'future' && !!s.started_at && !!s.ended_at
                     const mapped = mappedStopKey === segKey(row.label, s)
@@ -1135,13 +1235,7 @@ export function MachineStation() {
                       needsReason ||
                       s.color === 'red' ||
                       ['fault', 'unplanned', 'idle', 'setup', 'planned'].includes(s.state)
-                    const title = needsReason
-                      ? `${s.label} — left-click details · right-click add stop reason`
-                      : codeable
-                        ? `${s.label} — left-click performance · right-click code stop`
-                        : clickable
-                          ? `${s.label} — left-click for section performance`
-                          : s.label
+                    const title = formatSegTooltip(s, user?.name)
                     const className = `hour-seg color-${s.color} state-${s.state}${needsReason ? ' needs-reason' : ''}${clickable ? ' is-clickable' : ''}${codeable ? ' is-codeable' : ''}${mapped ? ' is-mapped' : ''}`
                     const style = { left: `${s.start_pct}%`, width: `${width}%` }
                     if (clickable) {
@@ -1177,6 +1271,11 @@ export function MachineStation() {
                       </div>
                     )
                   })}
+                  {showNow ? (
+                    <div className="hour-now-marker" style={{ left: `${nowMarker.pct}%` }} aria-hidden>
+                      <span className="hour-now-badge">NOW</span>
+                    </div>
+                  ) : null}
                   {!isFutureHour ? (
                     <div className="hour-cycles" aria-hidden>
                       {row.cycle_dots.map((pct, i) => (
@@ -1191,9 +1290,14 @@ export function MachineStation() {
                   <span className="qty-pending">—</span>
                 ) : (
                   <>
-                    <strong>{actualInt}</strong>
-                    <span className="qty-sep">/</span>
-                    <span className="qty-target">{targetInt}</span>
+                    <div className="qty-nums">
+                      <strong>{actualInt}</strong>
+                      <span className="qty-sep">/</span>
+                      <span className="qty-target">{targetInt}</span>
+                    </div>
+                    <span className="qty-bar" aria-hidden>
+                      <i style={{ width: `${qtyPct}%` }} />
+                    </span>
                   </>
                 )}
               </div>
@@ -1204,12 +1308,18 @@ export function MachineStation() {
 
       <footer className="station-foot">
         <div className="station-foot-ops">
-          <span className="foot-operator">{user?.name || 'Operator'}</span>
+          <span className="foot-operator">
+            {user?.name || 'Operator'}
+            {user?.role_name ? <span className="foot-role-pill">{user.role_name}</span> : null}
+          </span>
           <button
             type="button"
             className="foot-action"
             onClick={() => setFootNotice('Product changeover logged for this station')}
           >
+            <svg className="foot-ico" viewBox="0 0 16 16" aria-hidden>
+              <path d="M2 4h5l1 2h6v6H2V4zm2 3h2v4H4V7zm4 0h2v4H8V7zm4 0h2v4h-2V7z" fill="currentColor" />
+            </svg>
             Product changeover
           </button>
           <button
@@ -1217,10 +1327,16 @@ export function MachineStation() {
             className="foot-action"
             onClick={openFirstUncommented}
           >
+            <svg className="foot-ico" viewBox="0 0 16 16" aria-hidden>
+              <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 3v5h1.5V4H8zm0 7a1 1 0 110 2 1 1 0 010-2z" fill="currentColor" />
+            </svg>
             Stop reason
             {uncommentedCount > 0 ? <span className="foot-badge">{uncommentedCount}</span> : null}
           </button>
           <Link to="/quality" className="foot-action">
+            <svg className="foot-ico" viewBox="0 0 16 16" aria-hidden>
+              <path d="M3 2h10v3H3V2zm1 4h8l-1 8H5L4 6zm3 2v4h2V8H7z" fill="currentColor" />
+            </svg>
             Scrap
           </Link>
           <button
@@ -1228,9 +1344,15 @@ export function MachineStation() {
             className="foot-action"
             onClick={() => setFootNotice('Checklists: shift start / mould / safety')}
           >
+            <svg className="foot-ico" viewBox="0 0 16 16" aria-hidden>
+              <path d="M4 1h8v2H4V1zm0 3h8v11H4V4zm2 2v1h4V6H6zm0 3v1h4V9H6zm0 3v1h3v-1H6z" fill="currentColor" />
+            </svg>
             Checklists
           </button>
           <Link to="/reports" className="foot-action">
+            <svg className="foot-ico" viewBox="0 0 16 16" aria-hidden>
+              <path d="M2 2h12v12H2V2zm2 8h2V6H4v4zm3 2h2V5H7v7zm3-3h2V8h-2v3z" fill="currentColor" />
+            </svg>
             Downtime report
           </Link>
         </div>

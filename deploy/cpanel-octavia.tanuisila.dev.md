@@ -2,7 +2,12 @@
 
 Deploy Octavia (FastAPI + React) on a subdomain of **tanuisila.dev**.
 
-Target URL: **https://octavia.tanuisila.dev**
+| | |
+|---|---|
+| **URL** | https://octavia.tanuisila.dev |
+| **cPanel user** | `ipusgkqs` |
+| **Home** | `/home/ipusgkqs` |
+| **Docroot** | `/home/ipusgkqs/octavia.tanuisila.dev` |
 
 ---
 
@@ -10,9 +15,7 @@ Target URL: **https://octavia.tanuisila.dev**
 
 - cPanel with **Subdomains**, **MySQL Databases**, and **Setup Python App** (Passenger)
 - Python **3.11 or 3.12** (prefer 3.12)
-- Node.js available either:
-  - on your PC (build locally, upload `frontend/dist`), or
-  - via cPanel **Setup Node.js App** / SSH `npm`
+- Node.js on your PC to build the frontend (or cPanel Node if available)
 
 ---
 
@@ -21,56 +24,35 @@ Target URL: **https://octavia.tanuisila.dev**
 1. cPanel → **Domains** / **Subdomains**
 2. Subdomain: `octavia`
 3. Domain: `tanuisila.dev`
-4. Document root (example):  
-   `/home/YOURUSER/octavia.tanuisila.dev`  
-   (note the exact path cPanel shows)
-5. Save, then wait for DNS (usually automatic on the same cPanel account)
-
-Optional: enable **Force HTTPS** for the subdomain (SSL / AutoSSL).
+4. Document root: `/home/ipusgkqs/octavia.tanuisila.dev`
+5. Save, then enable **Force HTTPS** / AutoSSL for the subdomain
 
 ---
 
 ## 2. Create MySQL database + user
 
 1. cPanel → **MySQL® Databases**
-2. Create database, e.g. `YOURUSER_octavia`
-3. Create user, e.g. `YOURUSER_octavia` with a strong password
-4. Add user to database with **ALL PRIVILEGES**
-5. Note the full names (cPanel often prefixes `YOURUSER_`)
+2. Create database: `ipusgkqs_octavia`
+3. Create user: `ipusgkqs_octavia` with a strong password
+4. Add user → database with **ALL PRIVILEGES**
+5. Host: `localhost`
 
-Host is almost always `localhost`.
+(If cPanel shortens names, use the exact names it shows.)
 
 ---
 
 ## 3. Upload the code
 
-From GitHub (after this repo is pushed):
-
-**Option A – Git Version Control (cPanel)**  
-Clone into the subdomain root:
-
-```text
-https://github.com/silatanui/octavia.git
-```
-
-**Option B – SSH**
+**SSH (preferred):**
 
 ```bash
-cd ~/octavia.tanuisila.dev
+cd /home/ipusgkqs/octavia.tanuisila.dev
 git clone https://github.com/silatanui/octavia.git .
 ```
 
-**Option C – ZIP**  
-Download the repo ZIP from GitHub and extract into the subdomain document root so you see:
+Or cPanel **Git Version Control** → clone `https://github.com/silatanui/octavia.git` into that folder.
 
-```text
-octavia.tanuisila.dev/
-  backend/
-  frontend/
-  sql/
-  README.md
-  deploy/
-```
+Or upload/extract the GitHub ZIP so the folder contains `backend/`, `frontend/`, `sql/`, `deploy/`.
 
 Do **not** upload `backend/.venv`, `frontend/node_modules`, or `desktop/`.
 
@@ -78,19 +60,20 @@ Do **not** upload `backend/.venv`, `frontend/node_modules`, or `desktop/`.
 
 ## 4. Backend `.env`
 
-Create `backend/.env` (copy from `backend/.env.example`):
+Create `/home/ipusgkqs/octavia.tanuisila.dev/backend/.env`:
 
 ```env
-DATABASE_URL=mysql+pymysql://YOURUSER_octavia:YOUR_DB_PASSWORD@localhost:3306/YOURUSER_octavia
+DATABASE_URL=mysql+pymysql://ipusgkqs_octavia:YOUR_DB_PASSWORD@localhost:3306/ipusgkqs_octavia
 SECRET_KEY=change-me-to-a-long-random-string
 DEMO_MODE=true
 FACTORY_TIMEZONE=Africa/Nairobi
 CORS_ORIGINS=https://octavia.tanuisila.dev
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
+OCTAVIA_STATIC_DIR=/home/ipusgkqs/octavia.tanuisila.dev/frontend/dist
 ```
 
-Replace DB user, password, and database name with the cPanel values.
+Replace `YOUR_DB_PASSWORD` with the MySQL password from step 2.
 
 ---
 
@@ -99,78 +82,46 @@ Replace DB user, password, and database name with the cPanel values.
 1. cPanel → **Setup Python App** → **Create Application**
 2. Settings:
    - **Python version:** 3.12 (or 3.11)
-   - **Application root:** `octavia.tanuisila.dev/backend`  
-     (path relative to home, or absolute under the subdomain)
-   - **Application URL:** `octavia.tanuisila.dev` (leave path empty `/`)
+   - **Application root:** `octavia.tanuisila.dev/backend`
+   - **Application URL:** `octavia.tanuisila.dev` (path `/`)
    - **Application startup file:** `passenger_wsgi.py`
    - **Application Entry point:** `application`
-3. Create the app, then **Enter** the virtualenv it prints (or use the “Run pip install” UI)
-
-Install dependencies:
+3. Create the app, then install deps (use the virtualenv path cPanel prints):
 
 ```bash
-cd ~/octavia.tanuisila.dev/backend
-source ~/virtualenv/octavia.tanuisila.dev/backend/3.12/bin/activate
-# exact virtualenv path is shown in Setup Python App
+cd /home/ipusgkqs/octavia.tanuisila.dev/backend
+source /home/ipusgkqs/virtualenv/octavia.tanuisila.dev/backend/3.12/bin/activate
 pip install -r requirements.txt
-```
-
-Seed demo data once:
-
-```bash
-cd ~/octavia.tanuisila.dev/backend
 python seed.py
 ```
 
-Restart the Python app from cPanel (**Stop → Start** or **Restart**).
+Restart the Python app in cPanel.
 
-Health check: `https://octavia.tanuisila.dev/health`
+Health check: https://octavia.tanuisila.dev/health
 
 ---
 
 ## 6. Build and attach the frontend
 
-On your PC (recommended):
+On your PC:
 
 ```bash
-cd frontend
+cd C:\xampp\htdocs\Octavia\frontend
 npm install
 npm run build
 ```
 
-Upload the contents of `frontend/dist` to the server as:
+Upload `frontend/dist` (the folder with `index.html` + `assets/`) to:
 
 ```text
-~/octavia.tanuisila.dev/frontend/dist/
-  index.html
-  assets/
+/home/ipusgkqs/octavia.tanuisila.dev/frontend/dist/
 ```
 
-The API automatically serves that folder when present (same host as `/api`).
-
-If the UI does not appear, set in `backend/.env` or the Python App environment:
-
-```env
-OCTAVIA_STATIC_DIR=/home/YOURUSER/octavia.tanuisila.dev/frontend/dist
-```
-
-Then restart the Python app.
+Restart the Python app again if the UI was missing.
 
 ---
 
-## 7. Document root / `.htaccess` note
-
-Passenger should own the subdomain URL. If Apache still serves a blank `public_html` folder instead of Python:
-
-1. Confirm **Application URL** is exactly `octavia.tanuisila.dev/`
-2. In Setup Python App, open the generated config and ensure the subdomain docroot is the app root (or the parent that Passenger expects)
-3. Avoid putting a competing `index.html` in the docroot that bypasses Passenger
-
-If your host requires the app under a subfolder, keep the SPA and API on the same origin so the frontend can keep using `/api`.
-
----
-
-## 8. Demo logins (after `seed.py`)
+## 7. Demo logins (after `seed.py`)
 
 | Role | Email | Password |
 |------|-------|----------|
@@ -178,17 +129,15 @@ If your host requires the app under a subfolder, keep the SPA and API on the sam
 | Production Manager | manager@octavia.local | manager123 |
 | Supervisor | supervisor@octavia.local | super123 |
 
-Change passwords for any non-demo use.
-
 ---
 
-## 9. Updates later
+## 8. Updates later
 
 ```bash
-cd ~/octavia.tanuisila.dev
+cd /home/ipusgkqs/octavia.tanuisila.dev
 git pull
 cd backend
-source ~/virtualenv/.../bin/activate
+source /home/ipusgkqs/virtualenv/octavia.tanuisila.dev/backend/3.12/bin/activate
 pip install -r requirements.txt
 # rebuild/upload frontend/dist if UI changed
 # Restart Python App in cPanel
@@ -200,8 +149,7 @@ pip install -r requirements.txt
 
 | Symptom | Fix |
 |---------|-----|
-| 503 / Passenger error | Check Python App error log; confirm `passenger_wsgi.py` and `a2wsgi` installed |
-| `/health` works, UI blank | Upload `frontend/dist` or set `OCTAVIA_STATIC_DIR` |
-| API DB errors | Fix `DATABASE_URL` user/password/db name; grant privileges |
-| CORS errors | Set `CORS_ORIGINS=https://octavia.tanuisila.dev` and restart |
-| Seed fails | Confirm MySQL is reachable as `localhost` from the Python app |
+| 503 / Passenger error | Python App error log; confirm `a2wsgi` installed |
+| `/health` OK, UI blank | Upload `frontend/dist` or check `OCTAVIA_STATIC_DIR` |
+| API DB errors | Fix `DATABASE_URL` names/password; grant privileges |
+| CORS errors | `CORS_ORIGINS=https://octavia.tanuisila.dev` + restart |

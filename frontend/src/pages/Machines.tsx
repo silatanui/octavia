@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
+import { TableSkeleton } from '../components/Skeleton'
 import { StatusPill } from '../components/StatusPill'
 import { PLANT, machineByCode, machineByIndex, productByCode } from '../plantCatalog'
 
@@ -26,16 +27,19 @@ function fmtTime(iso?: string | null) {
 export function Machines() {
   const [machines, setMachines] = useState<MachineRow[]>([])
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const lineFilter = searchParams.get('line') || ''
 
   useEffect(() => {
     const qs = lineFilter ? `?line_id=${encodeURIComponent(lineFilter)}` : ''
+    setLoading(true)
     api
       .get<MachineRow[]>(`/machines${qs}`)
       .then(setMachines)
       .catch((e) => setError(e.message))
+      .finally(() => setLoading(false))
   }, [lineFilter])
 
   const counts = useMemo(() => {
@@ -124,72 +128,76 @@ export function Machines() {
         </section>
 
         <div className="machine-board">
-          <table>
-            <thead>
-              <tr>
-                <th>Machine</th>
-                <th>Line</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Current product</th>
-                <th>Target rate</th>
-                <th>Cycle</th>
-                <th>Source</th>
-                <th>Last update</th>
-              </tr>
-            </thead>
-            <tbody>
-              {machines.map((m) => {
-                const catalog = machineByCode(m.machine_code) || machineByIndex(m.id)
-                const product = productByCode(catalog.productCode)
-                const highlighted = lineFilter && String(m.production_line_id) === lineFilter
-                return (
-                  <tr
-                    key={m.id}
-                    className={highlighted ? 'is-line-highlight' : undefined}
-                    onClick={() => navigate(`/machines/${m.id}`)}
-                  >
-                    <td>
-                      <div className="cell-machine">
-                        <img src={catalog.image} alt="" />
-                        <div>
-                          <strong className="mono">{catalog.code}</strong>
-                          <span>{catalog.name}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td>{catalog.line || m.line_name || '—'}</td>
-                    <td className="muted-cell">{catalog.type || m.machine_type || '—'}</td>
-                    <td>
-                      <StatusPill status={String(m.status)} />
-                    </td>
-                    <td>
-                      <div className="cell-product">
-                        <img src={product.image} alt="" />
-                        <div>
-                          <div>{product.name}</div>
-                          <div className="muted-cell mono">{product.code}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="num">
-                      {product.hourlyTarget} {product.unit}/h
-                    </td>
-                    <td className="num muted-cell">{product.cycleSeconds}s</td>
-                    <td className="muted-cell">{m.status_source || '—'}</td>
-                    <td className="num muted-cell">{fmtTime(m.last_update_at)}</td>
-                  </tr>
-                )
-              })}
-              {!machines.length && !error ? (
+          {loading && !machines.length ? (
+            <TableSkeleton rows={8} cols={5} />
+          ) : (
+            <table>
+              <thead>
                 <tr>
-                  <td colSpan={9} className="muted-cell">
-                    No machines loaded
-                  </td>
+                  <th>Machine</th>
+                  <th>Line</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Current product</th>
+                  <th>Target rate</th>
+                  <th>Cycle</th>
+                  <th>Source</th>
+                  <th>Last update</th>
                 </tr>
-              ) : null}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {machines.map((m) => {
+                  const catalog = machineByCode(m.machine_code) || machineByIndex(m.id)
+                  const product = productByCode(catalog.productCode)
+                  const highlighted = lineFilter && String(m.production_line_id) === lineFilter
+                  return (
+                    <tr
+                      key={m.id}
+                      className={highlighted ? 'is-line-highlight' : undefined}
+                      onClick={() => navigate(`/machines/${m.id}`)}
+                    >
+                      <td>
+                        <div className="cell-machine">
+                          <img src={catalog.image} alt="" />
+                          <div>
+                            <strong className="mono">{catalog.code}</strong>
+                            <span>{catalog.name}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td>{catalog.line || m.line_name || '—'}</td>
+                      <td className="muted-cell">{catalog.type || m.machine_type || '—'}</td>
+                      <td>
+                        <StatusPill status={String(m.status)} />
+                      </td>
+                      <td>
+                        <div className="cell-product">
+                          <img src={product.image} alt="" />
+                          <div>
+                            <div>{product.name}</div>
+                            <div className="muted-cell mono">{product.code}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="num">
+                        {product.hourlyTarget} {product.unit}/h
+                      </td>
+                      <td className="num muted-cell">{product.cycleSeconds}s</td>
+                      <td className="muted-cell">{m.status_source || '—'}</td>
+                      <td className="num muted-cell">{fmtTime(m.last_update_at)}</td>
+                    </tr>
+                  )
+                })}
+                {!machines.length && !error ? (
+                  <tr>
+                    <td colSpan={9} className="muted-cell">
+                      No machines loaded
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </>

@@ -14,6 +14,7 @@ import {
   YAxis,
 } from 'recharts'
 import { api, formatNum, formatPct } from '../api'
+import { ChartSkeleton, KpiSkeleton, TableSkeleton } from '../components/Skeleton'
 
 type Overview = {
   generated_at: string
@@ -231,7 +232,20 @@ export function Quality() {
           inspection feed. Quality % still rolls into OEE elsewhere.
         </p>
         {error ? <div className="error">{error}</div> : null}
-        {loading && !data ? <div className="demo-banner">Loading quality…</div> : null}
+        {loading && !data ? (
+          <div aria-busy="true">
+            <KpiSkeleton count={5} />
+            <div className="quality-visual-row">
+              <div className="panel quality-panel">
+                <ChartSkeleton height={220} />
+              </div>
+              <div className="panel quality-panel">
+                <ChartSkeleton height={220} />
+              </div>
+            </div>
+            <TableSkeleton rows={5} cols={5} />
+          </div>
+        ) : null}
 
         {kpis ? (
           <div className="quality-kpi-strip">
