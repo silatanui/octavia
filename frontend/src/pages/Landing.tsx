@@ -425,13 +425,6 @@ export function Landing() {
             </div>
 
             <Reveal className="lp-hero-visual" delay={120}>
-              <div className="lp-float lp-float-a">
-                <i className="lp-float-dot is-red" aria-hidden />
-                <div>
-                  <span className="lp-float-label">Hydraulic issue</span>
-                  <strong>Stop coded in 1 click</strong>
-                </div>
-              </div>
               <div className="lp-window">
                 <div className="lp-window-bar">
                   <span /><span /><span />
@@ -452,13 +445,6 @@ export function Landing() {
                   <div><span>Parts</span><strong>177<em> / 240</em></strong></div>
                 </div>
                 <MiniTimeline rows={HERO_ROWS} nowRow={3} nowPct={64} />
-              </div>
-              <div className="lp-float lp-float-b">
-                <i className="lp-float-dot is-green" aria-hidden />
-                <div>
-                  <span className="lp-float-label">Octavia AI</span>
-                  <strong>8 machines checked</strong>
-                </div>
               </div>
             </Reveal>
           </div>
