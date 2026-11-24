@@ -429,7 +429,10 @@ export function Dashboard() {
             <thead>
               <tr>
                 <th className="col-machine">Machine</th>
-                <th className="col-count">Count</th>
+                <th className="col-count">
+                  Count
+                  <span className="th-sub">vs prev day</span>
+                </th>
                 <th className="col-oee">OEE</th>
                 <th className="col-util">Utilization</th>
                 <th className="col-cycle">Cycle time</th>
@@ -508,7 +511,9 @@ export function Dashboard() {
                         </td>
                         <td className="col-count">
                           <div className="count-main">{formatNum(m.output)}</div>
-                          <div className="count-prev">({formatNum(m.previous_output)})</div>
+                          <div className="count-prev" title="Previous day">
+                            prev {formatNum(m.previous_output)}
+                          </div>
                         </td>
                         <td className="col-oee">
                           <MetricBadge value={m.oee} />

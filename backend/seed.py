@@ -414,6 +414,108 @@ def seed_historical_data(days: int = 30, *, replace: bool = True) -> dict[str, i
         db.close()
 
 
+def seed_today_progress(*, replace: bool = True) -> dict[str, int]:
+    """Seed production for today's elapsed plant hours so Daily Production Count is not all zeros.
+
+    Uses factory timezone. Only fills hours that have already started; leaves later hours empty.
+    """
+    from app.services.plant_catalog import MACHINES as CATALOG_MACHINES, PRODUCTS as CATALOG_PRODUCTS
+    from app.services.station import _factory_tz
+
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        machines = list(db.scalars(select(Machine).where(Machine.active.is_(True)).order_by(Machine.id.asc())).all())
+        shifts = {s.shift_name: s for s in db.scalars(select(Shift)).all()}
+        products = list(db.scalars(select(Product).order_by(Product.id.asc())).all())
+        by_code = {p.product_code: p for p in products}
+        if not machines or not shifts or not products:
+            print("Cannot seed today — plant master data missing.")
+            return {"production": 0}
+
+        tz = _factory_tz()
+        now_local = datetime.now(tz)
+        # Dashboard day bounds are UTC calendar dates matching YYYY-MM-DD query
+        day_key = now_local.strftime("%Y-%m-%d")
+        day_utc_start = datetime.strptime(day_key, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        day_utc_end = day_utc_start + timedelta(days=1)
+
+        if replace:
+            db.execute(
+                delete(ProductionRecord).where(
+                    ProductionRecord.source == HISTORY_SOURCE,
+                    ProductionRecord.recorded_at >= day_utc_start,
+                    ProductionRecord.recorded_at < day_utc_end,
+                )
+            )
+            db.commit()
+
+        catalog_by_code = {m["code"]: m for m in CATALOG_MACHINES}
+        product_meta = {p["code"]: p for p in CATALOG_PRODUCTS}
+        open_wos = {
+            wo.machine_id: wo
+            for wo in db.scalars(select(WorkOrder).where(WorkOrder.status.in_(["In Progress", "Paused", "Completed"]))).all()
+        }
+        day_shift = shifts.get("Day")
+        afternoon = shifts.get("Afternoon")
+        night = shifts.get("Night")
+        shift_objs = [("Day", day_shift), ("Afternoon", afternoon), ("Night", night)]
+
+        current_hour = now_local.hour
+        elapsed_hours = {h for hours in SHIFT_HOURS.values() for h in hours if h <= current_hour}
+
+        prod_n = 0
+        for m_idx, machine in enumerate(machines):
+            rng = random.Random(f"{HISTORY_SOURCE}:today:{machine.id}:{day_key}")
+            spec = catalog_by_code.get(machine.machine_code) or {}
+            product_code = spec.get("product_code") or products[m_idx % len(products)].product_code
+            product = by_code.get(product_code) or products[m_idx % len(products)]
+            meta = product_meta.get(product.product_code) or {}
+            hourly_target = int(meta.get("hourly_target") or max(int(3600 / (product.ideal_cycle_time or 60)), 12))
+            wo = open_wos.get(machine.id)
+            util_bias = 0.72 + (m_idx % 5) * 0.04
+
+            for shift_name, shift in shift_objs:
+                if not shift:
+                    continue
+                shift_util = util_bias * (0.92 if shift_name == "Day" else 0.85 if shift_name == "Afternoon" else 0.7)
+                for hour in SHIFT_HOURS[shift_name]:
+                    if hour not in elapsed_hours:
+                        continue
+                    # Stamp as UTC midnight + hour so dashboard UTC day bucket matches date query
+                    stamp = day_utc_start.replace(hour=hour, minute=rng.randint(5, 50), second=0, microsecond=0)
+                    if stamp > datetime.now(timezone.utc) + timedelta(minutes=5):
+                        continue
+                    units = max(0, int(round(hourly_target * shift_util * rng.uniform(0.82, 1.12))))
+                    if hour in {6, 13, 14, 21, 22, 5}:
+                        units = int(units * rng.uniform(0.55, 0.85))
+                    scrap_rate = (0.012 + (m_idx % 4) * 0.006) * rng.uniform(0.5, 1.8)
+                    rejected = min(units, max(0, int(round(units * scrap_rate))))
+                    good = max(units - rejected, 0)
+                    db.add(
+                        ProductionRecord(
+                            work_order_id=wo.id if wo else None,
+                            machine_id=machine.id,
+                            shift_id=shift.id,
+                            recorded_at=stamp,
+                            total_units=units,
+                            good_units=good,
+                            rejected_units=rejected,
+                            source=HISTORY_SOURCE,
+                        )
+                    )
+                    prod_n += 1
+
+        db.commit()
+        print(f"Today progress seed: {prod_n} production rows for {day_key} (hours <= {current_hour}).")
+        return {"production": prod_n}
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def seed() -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
@@ -423,6 +525,7 @@ def seed() -> None:
             seed_staff_assignments_demo(db)
             db.close()
             seed_historical_data(days=30)
+            seed_today_progress()
             return
 
         roles = [
@@ -768,6 +871,7 @@ def seed() -> None:
         print("Login: admin@octavia.local / admin123")
         db.close()
         seed_historical_data(days=30)
+        seed_today_progress()
         return
     except Exception:
         db.rollback()
@@ -846,5 +950,8 @@ if __name__ == "__main__":
     elif len(sys.argv) > 1 and sys.argv[1] in {"--history", "history"}:
         hist_days = int(sys.argv[2]) if len(sys.argv) > 2 else 30
         seed_historical_data(days=hist_days)
+        seed_today_progress()
+    elif len(sys.argv) > 1 and sys.argv[1] in {"--today", "today"}:
+        seed_today_progress()
     else:
         seed()
