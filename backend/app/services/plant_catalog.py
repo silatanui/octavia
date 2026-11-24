@@ -7,7 +7,7 @@ from typing import Any
 PLANT = {
     "site_name": "Tanui Plastic Plant",
     "location": "Injection molding · Outdoor accessories",
-    "timezone": "Europe/Budapest",
+    "timezone": "Africa/Nairobi",
     "exterior_image": "/plant/plant-exterior.jpg",
     "tagline": "Outdoor plastic accessories · Injection molding",
 }

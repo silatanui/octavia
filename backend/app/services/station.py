@@ -183,7 +183,30 @@ def _shift_availability(
     return item
 
 
+def _overnight_night_active(now: datetime) -> bool:
+    """True between midnight and Night end (06:00) while Night is still running."""
+    active = _active_shift_for(now)
+    return active["key"] == "night" and now.hour < int(active["end_hour"])
+
+
+def _night_start_date(now: datetime) -> str:
+    """Calendar day Night is written against (the evening it started), not the morning it ends."""
+    return (now - timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def _production_date_for(now: datetime) -> str:
+    """Default work date: Night stays on its start day until 06:00."""
+    if _overnight_night_active(now):
+        return _night_start_date(now)
+    return now.strftime("%Y-%m-%d")
+
+
 def _available_shifts_for(date_str: str, now: datetime) -> list[dict[str, Any]]:
+    """Shifts that can be opened for ``date_str``.
+
+    Night that starts at 22:00 belongs to that calendar day, even after midnight.
+    After 00:00, open that start day (not calendar today) to keep working the same Night.
+    """
     return [
         item
         for s in SHIFTS
@@ -783,16 +806,14 @@ def build_station_board(
     if date and date < (now - timedelta(days=14)).strftime("%Y-%m-%d"):
         date = (now - timedelta(days=14)).strftime("%Y-%m-%d")
 
-    # Anchor date for shift windows. Night after midnight still uses the start calendar day.
+    # Night is always filed on the evening it starts (22:00 day), even if it runs past midnight.
+    # If the client asks for calendar "today" before 06:00, open that Night start day instead.
     if date:
         today = date
+        if date == today_str and _overnight_night_active(now):
+            today = _night_start_date(now)
     else:
-        # If currently in overnight night shift before 06:00, default date is yesterday (shift start day)
-        active = _active_shift_for(now)
-        if active["key"] == "night" and now.hour < int(active["end_hour"]):
-            today = (now - timedelta(days=1)).strftime("%Y-%m-%d")
-        else:
-            today = today_str
+        today = _production_date_for(now)
 
     available = _available_shifts_for(today, now)
     if not available:
@@ -802,13 +823,16 @@ def build_station_board(
 
     if shift and any(a["key"] == shift for a in available):
         shift_def = _shift_by_key(shift)
-    elif not date or today == today_str:
-        # Prefer the live shift when browsing today; else latest completed
-        live = next((a for a in available if a["state"] == "live"), None)
-        shift_def = _shift_by_key((live or available[-1])["key"])
     else:
-        # Past day: default to Day (first available)
-        shift_def = _shift_by_key(available[0]["key"])
+        # Prefer the live shift whenever it is running (incl. Night after midnight on start day)
+        live = next((a for a in available if a["state"] == "live"), None)
+        if live:
+            shift_def = _shift_by_key(live["key"])
+        elif today == today_str:
+            shift_def = _shift_by_key(available[-1]["key"])
+        else:
+            # Past day: default to Day (first available)
+            shift_def = _shift_by_key(available[0]["key"])
 
     shift_start, shift_end = _shift_window_for(shift_def, now=now, date_str=today)
     day_start, day_end = _day_bounds_local(today, tz)

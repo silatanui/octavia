@@ -287,7 +287,9 @@ export function MachineStation() {
   const [machineIds, setMachineIds] = useState<number[]>([])
   const [shiftKey, setShiftKey] = useState<string | null>(null)
   const [viewDate, setViewDate] = useState<string>(() => {
+    // Night (22:00–06:00) is filed on the evening it starts, not the morning it ends.
     const d = new Date()
+    if (d.getHours() < 6) d.setDate(d.getDate() - 1)
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   })
   const [catalog, setCatalog] = useState<StopCatalog | null>(null)
@@ -312,6 +314,8 @@ export function MachineStation() {
       const res = await api.get<StationBoard>(`/machines/${id}/station${qs}`)
       setBoard(res)
       setError('')
+      // Backend may remap calendar "today" before 06:00 onto Night's start day
+      if (res.date && res.date !== viewDate) setViewDate(res.date)
       // Keep selection valid (e.g. Night disappears until 22:00 on today)
       if (res.shift?.key) {
         const stillValid = !!shiftKey && !!res.shift.all?.some((s) => s.key === shiftKey)
@@ -324,10 +328,14 @@ export function MachineStation() {
 
   useEffect(() => {
     load()
-    // Only poll when reviewing today (live / earlier completed shifts)
+    // Poll while viewing the live production day (calendar today, or Night start day before 06:00)
     const d = new Date()
     const localToday = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    if (viewDate !== localToday) return
+    const nightStart = new Date(d)
+    if (d.getHours() < 6) nightStart.setDate(nightStart.getDate() - 1)
+    const nightStartDay = `${nightStart.getFullYear()}-${String(nightStart.getMonth() + 1).padStart(2, '0')}-${String(nightStart.getDate()).padStart(2, '0')}`
+    const liveDay = d.getHours() < 6 ? nightStartDay : localToday
+    if (viewDate !== liveDay && viewDate !== localToday) return
     const t = setInterval(load, 5000)
     return () => clearInterval(t)
   }, [load, viewDate])

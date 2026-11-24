@@ -592,7 +592,7 @@ def seed() -> None:
         site = Site(
             site_name="Tanui Plastic Plant",
             location="Injection molding · Outdoor accessories",
-            timezone="Europe/Budapest",
+            timezone="Africa/Nairobi",
         )
         db.add(site)
         db.flush()

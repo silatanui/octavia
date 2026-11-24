@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     database_url: str = "mysql+pymysql://root:@127.0.0.1:3306/octavia_production"
     demo_mode: bool = True
-    factory_timezone: str = "Europe/Budapest"
+    factory_timezone: str = "Africa/Nairobi"
     cors_origins: str = (
         "http://localhost:5173,http://127.0.0.1:5173,http://localhost,http://127.0.0.1,"
         "http://127.0.0.1:17800,http://localhost:17800"

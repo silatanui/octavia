@@ -72,33 +72,17 @@ function SectionHead({
   )
 }
 
-/** Animated login-style segment track. */
-function Motif({ rows }: { rows: Seg[][] }) {
-  return (
-    <div className="lp-motif" aria-hidden>
-      {rows.map((segs, r) => (
-        <div className="lp-motif-track" key={r}>
-          {segs.map(([state, w], i) => (
-            <i
-              key={i}
-              className={`lp-seg lp-seg-${state}`}
-              style={{ width: `${w}%`, animationDelay: `${0.25 + r * 0.18 + i * 0.07}s` }}
-            />
-          ))}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function Ribbon({ row, reverse = false }: { row: [SegState, number][]; reverse?: boolean }) {
+/** Single decorative capsule ribbon — used once on the homepage hero. */
+function Ribbon({ row }: { row: [SegState, number][] }) {
   const loop = [...row, ...row]
   return (
-    <div className="lp-ribbon-row" aria-hidden>
-      <div className={`lp-ribbon-run${reverse ? ' is-reverse' : ''}`}>
-        {loop.map(([state, w], i) => (
-          <i key={i} className={`lp-seg lp-seg-${state}`} style={{ width: w }} />
-        ))}
+    <div className="lp-ribbon" aria-hidden>
+      <div className="lp-ribbon-row">
+        <div className="lp-ribbon-run">
+          {loop.map(([state, w], i) => (
+            <i key={i} className={`lp-seg lp-seg-${state}`} style={{ width: w }} />
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -170,19 +154,9 @@ const HERO_ROWS = [
   { label: '12', segs: [['future', 100]] as Seg[] },
 ]
 
-const HERO_MOTIF: Seg[][] = [
-  [['run', 42], ['slow', 10], ['run', 18], ['stop', 8], ['run', 22]],
-  [['run', 26], ['stop', 7], ['run', 38], ['slow', 12], ['future', 17]],
-  [['run', 55], ['slow', 8], ['run', 22], ['future', 15]],
-]
-
-const RIBBON_A: [SegState, number][] = [
+const HERO_RIBBON: [SegState, number][] = [
   ['run', 150], ['slow', 36], ['run', 90], ['stop', 28], ['run', 180], ['break', 40], ['run', 120], ['slow', 24],
   ['run', 200], ['stop', 20], ['run', 110],
-]
-const RIBBON_B: [SegState, number][] = [
-  ['run', 90], ['stop', 24], ['run', 160], ['slow', 30], ['run', 70], ['future', 90], ['run', 140], ['slow', 26],
-  ['run', 190], ['break', 36], ['run', 100],
 ]
 
 const MACHINE_ROWS = [
@@ -234,31 +208,6 @@ const STAGES = [
     points: ['Issues, highlights, standards and recommendations', 'Ask questions about OEE, scrap and downtime', 'Reports with filters you control'],
   },
 ] as const
-
-function Icon({ name }: { name: 'board' | 'layers' | 'gauge' }) {
-  const common = { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
-  if (name === 'board')
-    return (
-      <svg {...common} aria-hidden>
-        <rect x="3" y="4" width="18" height="16" rx="2.5" />
-        <path d="M3 9.5h18M8 4v16" />
-      </svg>
-    )
-  if (name === 'layers')
-    return (
-      <svg {...common} aria-hidden>
-        <path d="m12 3 9 5-9 5-9-5 9-5Z" />
-        <path d="m3 13 9 5 9-5" />
-      </svg>
-    )
-  return (
-    <svg {...common} aria-hidden>
-      <path d="M4 17a8 8 0 1 1 16 0" />
-      <path d="m12 17 4-5" />
-      <circle cx="12" cy="17" r="1.2" />
-    </svg>
-  )
-}
 
 function StageMock({ id }: { id: (typeof STAGES)[number]['id'] }) {
   if (id === 'plan') {
@@ -386,30 +335,30 @@ function StageMock({ id }: { id: (typeof STAGES)[number]['id'] }) {
   )
 }
 
-const FLOORS: { title: string; copy: string; chips: string[]; strip: Seg[][] }[] = [
+const FLOORS: { title: string; copy: string; chips: string[]; icon: string }[] = [
   {
     title: 'Injection moulding',
     copy: 'Cycle time against target, mould changes and scrap purges tracked per press.',
     chips: ['Cycle time', 'Mould life', 'Scrap'],
-    strip: [[['run', 50], ['slow', 10], ['run', 28], ['stop', 12]], [['run', 30], ['stop', 8], ['run', 62]]],
+    icon: 'fa-industry',
   },
   {
     title: 'Assembly cells',
     copy: 'Starved and blocked states stay visible so upstream waits never hide inside OEE.',
     chips: ['Waiting for work', 'Takt', 'Quality'],
-    strip: [[['run', 36], ['slow', 24], ['run', 40]], [['run', 60], ['slow', 12], ['run', 28]]],
+    icon: 'fa-screwdriver-wrench',
   },
   {
     title: 'Packaging',
     copy: 'Changeovers, colour swaps and material shortages coded and ranked every week.',
     chips: ['Changeover', 'Material', 'Pareto'],
-    strip: [[['run', 40], ['break', 14], ['run', 46]], [['slow', 18], ['run', 58], ['stop', 10], ['run', 14]]],
+    icon: 'fa-box',
   },
   {
     title: 'Machining',
     copy: 'Tool changes and planned maintenance separated from true unplanned downtime.',
     chips: ['Tool change', 'PM', 'Availability'],
-    strip: [[['run', 62], ['break', 10], ['run', 28]], [['run', 22], ['stop', 14], ['run', 64]]],
+    icon: 'fa-gears',
   },
 ]
 
@@ -468,7 +417,6 @@ export function Landing() {
                   See how it works
                 </a>
               </div>
-              <Motif rows={HERO_MOTIF} />
               <ul className="lp-hero-facts">
                 <li><strong>5s</strong> live refresh</li>
                 <li><strong>3</strong> shifts, one view</li>
@@ -515,10 +463,7 @@ export function Landing() {
             </Reveal>
           </div>
 
-          <div className="lp-ribbon" aria-hidden>
-            <Ribbon row={RIBBON_A} />
-            <Ribbon row={RIBBON_B} reverse />
-          </div>
+          <Ribbon row={HERO_RIBBON} />
 
           <div className="lp-wrap lp-built">
             <span>Built for every kind of line</span>
@@ -536,8 +481,7 @@ export function Landing() {
           <div className="lp-wrap">
             <Reveal>
               <h2>
-                The first production monitor that scales with <i className="lp-inline lp-inline-run" aria-hidden /> your
-                floor, not your <i className="lp-inline lp-inline-stop" aria-hidden /> clipboards.
+                The first production monitor that scales with your floor, not your clipboards.
               </h2>
             </Reveal>
           </div>
@@ -556,15 +500,15 @@ export function Landing() {
             <div className="lp-cards-3">
               {(
                 [
-                  ['board', 'Station Board', 'Operators and supervisors run the shift from one screen. Left-click for performance, right-click to code a stop.', 'Control layer'],
-                  ['layers', 'Stop Context', 'Octavia builds a living record of why machines stop, so every reason is coded once and reused in every report.', 'Knowledge layer'],
-                  ['gauge', 'KPI Foundation', 'Availability, performance, quality and OEE are calculated from recorded counts and downtime, never typed in.', 'Execution layer'],
+                  ['fa-table-columns', 'Station Board', 'Operators and supervisors run the shift from one screen. Left-click for performance, right-click to code a stop.', 'Control layer'],
+                  ['fa-layer-group', 'Stop Context', 'Octavia builds a living record of why machines stop, so every reason is coded once and reused in every report.', 'Knowledge layer'],
+                  ['fa-gauge-high', 'KPI Foundation', 'Availability, performance, quality and OEE are calculated from recorded counts and downtime, never typed in.', 'Execution layer'],
                 ] as const
               ).map(([icon, t, c, tag], i) => (
                 <Reveal key={t} delay={i * 80}>
                   <article className="lp-card">
                     <span className="lp-card-icon">
-                      <Icon name={icon} />
+                      <i className={`fa-solid ${icon}`} aria-hidden />
                     </span>
                     <span className="lp-card-tag">{tag}</span>
                     <h3>{t}</h3>
@@ -811,14 +755,8 @@ export function Landing() {
               {FLOORS.map((f, i) => (
                 <Reveal key={f.title} delay={i * 70}>
                   <article className="lp-floor">
-                    <div className="lp-floor-strip" aria-hidden>
-                      {f.strip.map((row, r) => (
-                        <div className="lp-floor-track" key={r}>
-                          {row.map(([state, w], j) => (
-                            <i key={j} className={`lp-seg lp-seg-${state}`} style={{ width: `${w}%` }} />
-                          ))}
-                        </div>
-                      ))}
+                    <div className="lp-floor-icon" aria-hidden>
+                      <i className={`fa-solid ${f.icon}`} />
                     </div>
                     <h3>{f.title}</h3>
                     <p>{f.copy}</p>
@@ -849,7 +787,6 @@ export function Landing() {
                       Explore the platform
                     </a>
                   </div>
-                  <Motif rows={[HERO_MOTIF[0], HERO_MOTIF[2]]} />
                 </div>
               </div>
             </Reveal>

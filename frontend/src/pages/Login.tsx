@@ -38,33 +38,20 @@ export function Login() {
           <p className="login-hero-copy">
             Shift timelines, OEE, and stop reasons. Built for operators and supervisors.
           </p>
-          <div className="login-hero-motif" aria-hidden>
-            <div className="login-motif-track">
-              <i className="seg run" style={{ width: '42%' }} />
-              <i className="seg slow" style={{ width: '12%' }} />
-              <i className="seg run" style={{ width: '18%' }} />
-              <i className="seg stop" style={{ width: '10%' }} />
-              <i className="seg run" style={{ width: '18%' }} />
-            </div>
-            <div className="login-motif-track">
-              <i className="seg run" style={{ width: '28%' }} />
-              <i className="seg stop" style={{ width: '8%' }} />
-              <i className="seg run" style={{ width: '36%' }} />
-              <i className="seg slow" style={{ width: '14%' }} />
-              <i className="seg future" style={{ width: '14%' }} />
-            </div>
-            <div className="login-motif-track">
-              <i className="seg run" style={{ width: '55%' }} />
-              <i className="seg slow" style={{ width: '9%' }} />
-              <i className="seg run" style={{ width: '22%' }} />
-              <i className="seg future" style={{ width: '14%' }} />
-            </div>
-            <div className="login-motif-dots">
-              <span className="dot run" />
-              <span className="dot slow" />
-              <span className="dot stop" />
-            </div>
-          </div>
+          <ul className="login-hero-points">
+            <li>
+              <i className="fa-solid fa-clock" aria-hidden />
+              Live hourly timelines
+            </li>
+            <li>
+              <i className="fa-solid fa-gauge-high" aria-hidden />
+              OEE from recorded data
+            </li>
+            <li>
+              <i className="fa-solid fa-triangle-exclamation" aria-hidden />
+              Coded stop reasons
+            </li>
+          </ul>
         </div>
       </aside>
 

@@ -97,9 +97,20 @@ function MetricBadge({
   return <span className={`badge ${tone}`}>{value.toFixed(1)}%</span>
 }
 
+function localDateISO(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** Night is written on the evening it starts; before 06:00 that is still the live work day. */
+function productionDateISO(d = new Date()) {
+  const x = new Date(d)
+  if (x.getHours() < 6) x.setDate(x.getDate() - 1)
+  return localDateISO(x)
+}
+
 export function Dashboard() {
   const navigate = useNavigate()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = productionDateISO()
   const [datePreset, setDatePreset] = useState('today')
   const [date, setDate] = useState(today)
   const [siteId, setSiteId] = useState('')
@@ -141,11 +152,15 @@ export function Dashboard() {
 
   function applyPreset(preset: string) {
     setDatePreset(preset)
+    if (preset === 'today') {
+      setDate(productionDateISO())
+      return
+    }
     const d = new Date()
     if (preset === 'yesterday') d.setDate(d.getDate() - 1)
     if (preset === '3days') d.setDate(d.getDate() - 3)
     if (preset === '7days') d.setDate(d.getDate() - 7)
-    setDate(d.toISOString().slice(0, 10))
+    setDate(localDateISO(d))
   }
 
   const qs = useMemo(() => {
